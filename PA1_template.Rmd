@@ -7,19 +7,74 @@ output:
 
 
 ## Loading and preprocessing the data
+I read the data into R with the standard read.csv() function. Thereafter,I changed the date variable into a date format, as it was loaded as factors by default.
+```{r preprocessing,echo=TRUE}
+activity<-read.csv("activity.csv",header=TRUE)
+activity$date=as.Date(activity$date)
+```
 
-
-
-## What is mean total number of steps taken per day?
-
+### What is mean total number of steps taken per day?
+For this part I ignored the missing values of the data set, which are dealt with later. To make a histogram of the total number of steps taken each day, I used the tapply() function, which splits data by variables and then applies functions to them - the mean in this case. Furthermore, I calculated the mean and median of total number of steps taken per day, and stored them in variables.
+```{r mean_steps,echo=TRUE}
+total_StepsPerDay=tapply(activity$steps,activity$date,sum,na.rm=TRUE)
+hist(total_StepsPerDay,breaks=30,main="Total Number of Steps per Day",xlab="Steps")
+(mean_StepsPerDay=tapply(activity$steps,activity$date,mean,na.rm=TRUE))
+(median_StepSPerDay=tapply(activity$steps,activity$date,median,na.rm=TRUE))
+```
 
 
 ## What is the average daily activity pattern?
-
+As a next step, we shall create a time series plot which evaluates the average number of steps taken, averaged across all days by the 5-minute intervals. Again, the data was processed with the tapply() function for this. Also, we shall assess which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps. This is interval 835 with 206.2 steps.
+```{r mean_activity_pattern,echo=TRUE}
+mean_StepsPerInterval=tapply(activity$steps,activity$interval,mean,na.rm=TRUE)
+intervals=split(activity,activity$date=="2012-10-01")[[2]][,3]
+plot(mean_StepsPerInterval~intervals,main="Average no. of Steps Taken per Interval",
+     xlab="Interval",ylab="Steps",type="l")
+sort(mean_StepsPerInterval)[length(mean_StepsPerInterval)]
+```
 
 
 ## Imputing missing values
+Missing values are a problem introduced in most realistic data-sets and need to be dealt with accordingly. First, I found that 2304 rows contained missings. Second, I applied a bootstrap re-sampling with replacement method, which imputed the missing values. This new data set is called activity.bootNA. Lastly, I repeated the steps performed in "What is mean total number of steps taken per day?". In the histogram containing missing values these were treated as zeroes, thus yielding in a peak there. This effect vanished in the imputed histogram and overall the plot looked more normally distributed as well. This effect is also noticeable in the mean() and median() calculations on the imputed data-set.
+```{r missing_values,echo=TRUE}
+nrow(activity)-sum(complete.cases(activity))
 
+# Replace NA's in data with bootstrapping from predictor
+activity.bootNA<-activity
+for(j in 1:ncol(activity.bootNA)){
+    for(i in 1:nrow(activity.bootNA)){
+        if(is.na(activity.bootNA[i,j])){
+            activity.bootNA[i,j]=sample(x=na.omit(activity.bootNA[,j]),size=1,replace=TRUE)
+        }
+    }
+}
+rm(i,j)
+
+total_StepsPerDay.bootNA=tapply(activity.bootNA$steps,activity.bootNA$date,sum)
+hist(total_StepsPerDay.bootNA,breaks=30,main="Histogram of Total Number of Steps per Day (imputed)",xlab="Number of Steps")
+(mean_StepsPerDay.bootNA=tapply(activity.bootNA$steps,activity.bootNA$date,mean))
+(median_StepSPerDay.bootNA=tapply(activity.bootNA$steps,activity.bootNA$date,median))
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+As a final step, I assessed whether differences in activity patterns exist between weekdays and weekends. To achieve this, I added a new column to the original data set called dayType with the levels "weekday" and "weekend". I believe this is elegantly done with the use of the packages data.table and lubridate, so I loaded those beforehand. Then I plotted a panel plot similar to the time series plot in "What is the average daily activity pattern?", but this time separated by weekdays and weekends. It seems as if weekends contribute to more steps than weekdays.
+```{r weekdays_weekends,echo=TRUE}
+library(data.table)
+library(lubridate)
+
+activity_dayType=as.data.table(activity)
+activity_dayType[,dayType:={ifelse(wday(date)==1|wday(date)==7,'weekend','weekday')}]
+activity_weekday=subset(activity_dayType,dayType %in% 'weekday')
+activity_weekend=subset(activity_dayType,dayType %in% 'weekend')
+
+mean_StepsPerInterval_weekday=tapply(activity_weekday$steps,activity_weekday$interval,mean,na.rm=TRUE)
+mean_StepsPerInterval_weekend=tapply(activity_weekend$steps,activity_weekend$interval,mean,na.rm=TRUE)
+
+par(mfrow=c(2,1))
+plot(mean_StepsPerInterval_weekday~intervals,main="Weekdays",
+     xlab="Interval",ylab="Number of Steps",type="l")
+plot(mean_StepsPerInterval_weekend~intervals,main="Weekends",
+     xlab="Interval",ylab="Number of Steps",type="l")
+```
+
